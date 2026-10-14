@@ -1,0 +1,44 @@
+name: Build e publicar (Hostinger)
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-hostinger
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: curl, gd, mbstring, intl, zip, mysqli
+          tools: composer:v2
+
+      - name: Instalar dependências (sem pacotes de desenvolvimento)
+        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+      - name: Montar pacote de publicação
+        run: |
+          mkdir _deploy
+          rsync -a --exclude='.git' --exclude='.github' --exclude='docker' --exclude='_deploy' ./ _deploy/
+          sed -i '/vendor/d' _deploy/.gitignore
+
+      - name: Publicar na branch deploy
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_deploy
+          publish_branch: deploy
+          force_orphan: true
+          enable_jekyll: true
+          commit_message: 'deploy: ${{ github.event.head_commit.message }}'
